@@ -338,6 +338,55 @@ name to use in `conf.d/`.
 
 ---
 
+## Audio dies after suspend/resume (DSP wedge)
+
+**Symptom:** Audio works after boot, then "randomly" disappears. Restarting
+WirePlumber does not help; only a reboot used to fix it.
+
+**Root cause:** It is not random — the SOF DSP firmware does not survive
+s2idle suspend on this hardware. ~90 seconds after resume, the speaker PCM
+enters a permanent error loop. Diagnose with:
+
+```bash
+journalctl --user -u pipewire -n 5
+# spa.alsa: hw:sofrt5682,0p: (45 suppressed) snd_pcm_avail after recover: Broken pipe
+#   ...repeating every ~6 seconds → the DSP is wedged
+journalctl -b -1 | grep -E "PM: suspend (entry|exit)"
+#   ...confirms the wedge follows a suspend/resume cycle
+```
+
+`aplay -l` still lists the card and `wpctl status` may hang — userspace
+restarts can't fix it because the dead firmware lives in the DSP itself.
+
+**Fix without rebooting:** tear down the audio PCI device and rescan, which
+forces a fresh firmware download to the DSP (verified working):
+
+```bash
+sudo bash sof-audio-recover.sh
+```
+
+**Permanent fix:** install the systemd sleep hook, which stops the audio
+stack before suspend and resets the DSP after every resume:
+
+```bash
+sudo bash install-suspend-fix.sh
+```
+
+Files:
+- `sof-audio-recover.sh` — manual recovery (also installed as
+  `/usr/local/sbin/sof-audio-recover`)
+- `sof-audio-sleep-hook.sh` — installed as
+  `/usr/lib/systemd/system-sleep/sof-audio`
+- `install-suspend-fix.sh` — installer for both
+
+**Note on boot-time DMIC errors:** at every PipeWire start the kernel logs a
+burst of `sof_ipc3_pcm_hw_params: pcm100 (DMIC16kHz) ... ipc failed` errors.
+This is PipeWire probing the DMIC PCM that the topology exposes but the
+firmware rejects (NHLT reports 0 DMICs). It is harmless noise — the DSP
+survives it — and unrelated to the suspend wedge above.
+
+---
+
 ## Making it survive package upgrades
 
 If `alsa-ucm-conf` is upgraded, it may overwrite files in

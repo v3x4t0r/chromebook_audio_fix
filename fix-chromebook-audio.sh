@@ -173,6 +173,13 @@ sudo -u "$REAL_USER" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$REAL_UID/bus" \
     wpctl status 2>/dev/null | grep -A 15 "^Audio" || true
 
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+if [[ -f "$SCRIPT_DIR/install-suspend-fix.sh" ]]; then
+    echo ""
+    echo "Installing suspend/resume DSP reset hook..."
+    bash "$SCRIPT_DIR/install-suspend-fix.sh"
+fi
+
 echo ""
 echo "If you see 'Internal Speakers' above, audio is working."
 echo "To restore after a system upgrade that breaks audio:"
