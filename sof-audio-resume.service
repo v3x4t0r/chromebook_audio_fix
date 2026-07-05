@@ -1,0 +1,34 @@
+# sof-audio-resume.service
+# Installed to /etc/systemd/system/ by install-suspend-fix.sh.
+#
+# Resets the SOF DSP after every resume by running the verified recovery
+# sequence (stop pipewire -> PCI remove/rescan -> start pipewire).
+#
+# This deliberately runs AFTER suspend.target instead of as a
+# /usr/lib/systemd/system-sleep/ hook: systemd >= 256 freezes user.slice
+# around sleep hooks, which deadlocks them two ways —
+#   * `systemctl --user` calls hang against the frozen user manager
+#     (~90 s D-Bus timeout), and
+#   * removing the PCI sound device blocks forever in snd_card_free,
+#     which waits for the frozen pipewire to close its ALSA fds —
+# and while a hook hangs, the whole session stays frozen: black screen,
+# machine looks dead. By the time this unit starts, resume is complete
+# and the session is thawed, so neither deadlock can happen.
+
+[Unit]
+Description=Reset SOF DSP after resume (Copano audio suspend wedge)
+After=suspend.target
+
+[Service]
+Type=oneshot
+# Let the platform finish waking before touching the audio hardware:
+# a recovery started at the exact second of resume (amps/I2C/EC still
+# settling, lid switch still bouncing) rebuilds the card silently dead,
+# while the identical run on a settled system is audible. The recover
+# script sleeps this long AFTER stopping the audio stack, so any looping
+# wedge noise is silenced right away.
+Environment=SOF_SETTLE=10
+ExecStart=/usr/local/sbin/sof-audio-recover
+
+[Install]
+WantedBy=suspend.target

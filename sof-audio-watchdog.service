@@ -1,0 +1,20 @@
+# sof-audio-watchdog.service
+# Installed to /etc/systemd/system/ by install-suspend-fix.sh.
+#
+# Companion to sof-audio-resume.service: that one handles the (common)
+# suspend-triggered DSP wedge; this one catches wedges that happen with
+# no suspend at all by watching the journal for the Broken-pipe loop
+# and running the same recovery. See sof-audio-watchdog.sh for the
+# detection thresholds and cooldown.
+
+[Unit]
+Description=Auto-recover wedged SOF DSP (Copano audio watchdog)
+After=multi-user.target systemd-journald.service
+
+[Service]
+ExecStart=/usr/local/sbin/sof-audio-watchdog
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
