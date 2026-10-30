@@ -13,6 +13,14 @@ REAL_USER="${SUDO_USER:-}"
 [[ -n "$REAL_USER" ]] || { echo "Use sudo, not su/root directly."; exit 1; }
 REAL_UID=$(id -u "$REAL_USER")
 
+# Needed for the verification in step 2. Fedora ships it outside alsa-utils.
+command -v alsaucm >/dev/null || {
+    echo "alsaucm not found. Install it first:"
+    echo "  Ubuntu/Debian: sudo apt install alsa-utils"
+    echo "  Fedora:        sudo dnf install alsa-ucm-utils"
+    exit 1
+}
+
 echo "[1/4] Writing UCM config files..."
 
 UCM2=/usr/share/alsa/ucm2

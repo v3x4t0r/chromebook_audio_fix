@@ -3,7 +3,18 @@
 Applies to: Chromebooks with Intel Tiger Lake and Realtek RT5682 codec running Linux
 (e.g. ASUS C436FA "Copano", and other Google TGL Chromebooks)
 
-Tested on: Ubuntu 26.04 LTS, kernel 7.0.0, alsa-ucm-conf 1.2.15.3
+Tested on:
+- Ubuntu 26.04 LTS, kernel 7.0.0, alsa-ucm-conf 1.2.15.3
+- Fedora 44 Workstation, kernel 7.2.13, alsa-ucm 1.2.15.3
+
+> **Fedora:** `alsaucm` (used below and by `fix-chromebook-audio.sh` to
+> verify the config) is not in `alsa-utils` on Fedora but in its own
+> package. Install it first, otherwise the script fails with
+> "UCM still not found" even though the config was written correctly:
+> ```bash
+> sudo dnf install alsa-ucm-utils
+> ```
+> Everything else — paths, services, the suspend fix — works unchanged.
 
 ---
 
