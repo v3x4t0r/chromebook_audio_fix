@@ -6,6 +6,8 @@ Applies to: Chromebooks with Intel Tiger Lake and Realtek RT5682 codec running L
 Tested on:
 - Ubuntu 26.04 LTS, kernel 7.0.0, alsa-ucm-conf 1.2.15.3
 - Fedora 44 Workstation, kernel 7.2.13, alsa-ucm 1.2.15.3
+  (UCM fix works; the suspend recovery does **not** — see
+  [Recovery broken on kernel 7.2.13](#recovery-broken-on-kernel-7213-corrupted-card-name))
 
 > **Fedora:** `alsaucm` (used below and by `fix-chromebook-audio.sh` to
 > verify the config) is not in `alsa-utils` on Fedora but in its own
@@ -439,6 +441,53 @@ Files:
 before the reset (browsers especially) may stay silent until restarted**
 — the audio device they were attached to no longer exists. Most desktop
 apps reconnect automatically.
+
+### Recovery broken on kernel 7.2.13 (corrupted card name)
+
+**Symptom:** no sound at all after any suspend/resume — not even HDMI or
+Bluetooth — and `wpctl status` says "Could not connect to PipeWire".
+
+**What happens:** since moving from kernel 6.19.10 to 7.2.13 (Fedora 44,
+2026-10-30), every run of the recovery fails at step 4:
+
+```
+sof-audio-recover: ERROR: sound card did not come back after rescan.
+```
+
+The card *does* come back — `aplay -l` lists the speaker, headset and
+HDMI PCMs — but its driver name and id in `/proc/asound/cards` are
+random bytes instead of `sof-rt5682` / `sofrt5682`:
+
+```
+ 0 [D0J            ]: 0JM-C_M-^?M-^?M-^?M-^?__ - 0JM-CM-*M-^?M-^?M-^?M-^?^B^T
+                      Google-Copano-rev3
+```
+
+(the jack input devices created at rescan get the same garbage names,
+e.g. `0Jê���� Headset Jack` in `/proc/bus/input/devices`). At boot the
+name is correct; it only breaks on the PCI remove/rescan rebuild. That
+looks like a kernel regression — the name being copied from memory
+that is already freed — but the exact cause is not confirmed yet.
+
+Two consequences:
+1. UCM is looked up by card driver name (`conf.d/sof-rt5682/`), so it no
+   longer matches (`alsaucm -c hw:0 list _verbs` → `failed to import
+   hw:0 use case configuration -2`). Even with PipeWire running, the
+   card shows up under Devices but has no sinks or sources.
+2. Older versions of `sof-audio-recover.sh` exited on the failed check
+   *after* stopping PipeWire and never restarted it, so every resume
+   left the session with no audio server at all. The script now
+   restarts the audio stack however it exits, and reports the corrupted
+   name explicitly.
+
+**Workaround:** reboot. That restores the card name and audio, until the
+next suspend. Newer kernels (7.2.15, 7.3.3) are installed but not yet
+tested; check whether the name survives a recovery on them:
+
+```bash
+sudo sof-audio-recover
+cat /proc/asound/cards   # must show [sofrt5682 ]: sof-rt5682
+```
 
 **Note on boot-time DMIC errors:** at every PipeWire start the kernel logs a
 burst of `sof_ipc3_pcm_hw_params: pcm100 (DMIC16kHz) ... ipc failed` errors.

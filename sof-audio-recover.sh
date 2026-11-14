@@ -41,6 +41,19 @@ run_user() {
         "$@"
 }
 
+restart_audio_stack() {
+    # restart, not start: if the stop below timed out, the units are still
+    # marked active and a plain start would be a no-op on a broken pipewire.
+    run_user systemctl --user restart \
+        pipewire.socket pipewire-pulse.socket wireplumber.service
+}
+
+# Once the stack is stopped, bring it back up however this script exits.
+# Without this, any failure below (seen on kernel 7.2.13: the card-name
+# check fails after every resume) leaves pipewire stopped for good — no
+# sound at all, not even on HDMI or Bluetooth, until a reboot.
+trap 'echo "Recovery failed — restarting user audio stack anyway."; restart_audio_stack || true' EXIT
+
 echo "[1/5] Stopping user audio stack (max 15s — pipewire may be stuck on the dead PCM)..."
 # When the DSP is wedged, pipewire can hang in a kernel call on the PCM and
 # ignore SIGTERM; don't wait for it. The PCI remove below force-disconnects
@@ -96,14 +109,21 @@ echo "[4/5] Rescanning PCI bus (re-downloads firmware to DSP)..."
 echo 1 > /sys/bus/pci/rescan
 sleep 2
 
-grep -q sofrt5682 /proc/asound/cards \
+compgen -G "/sys/bus/pci/devices/$AUDIO_PCI/*/sound/card*" >/dev/null \
     || { echo "ERROR: sound card did not come back after rescan."; exit 1; }
 
+# On kernel 7.2.13 the card does come back, but with a corrupted driver
+# name and id in /proc/asound/cards (random bytes instead of
+# sof-rt5682 / sofrt5682). UCM is looked up by driver name, so it no
+# longer matches: pipewire sees the card but creates no sinks. Worked
+# on 6.19; a reboot restores the name. Report it instead of claiming
+# success.
+grep -q sofrt5682 /proc/asound/cards \
+    || { echo "ERROR: sound card came back with a corrupted name (kernel bug seen on 7.2.13); UCM cannot match it. Reboot to restore audio."; exit 1; }
+
 echo "[5/5] Starting user audio stack..."
-# restart, not start: if the stop above timed out, the units are still
-# marked active and a plain start would be a no-op on a broken pipewire.
-run_user systemctl --user restart \
-    pipewire.socket pipewire-pulse.socket wireplumber.service
+trap - EXIT
+restart_audio_stack
 sleep 3
 
 echo ""
