@@ -112,14 +112,14 @@ sleep 2
 compgen -G "/sys/bus/pci/devices/$AUDIO_PCI/*/sound/card*" >/dev/null \
     || { echo "ERROR: sound card did not come back after rescan."; exit 1; }
 
-# On kernel 7.2.13 the card does come back, but with a corrupted driver
-# name and id in /proc/asound/cards (random bytes instead of
-# sof-rt5682 / sofrt5682). UCM is looked up by driver name, so it no
-# longer matches: pipewire sees the card but creates no sinks. Worked
-# on 6.19; a reboot restores the name. Report it instead of claiming
-# success.
+# On kernels 7.2.13 and 7.3.3 the card does come back, but with a
+# corrupted driver name and id in /proc/asound/cards (random bytes that
+# change over time, instead of sof-rt5682 / sofrt5682). UCM is looked
+# up by driver name, so it no longer matches: pipewire sees the card but
+# creates no sinks. Worked on 6.19; a reboot restores the name. Report
+# it instead of claiming success.
 grep -q sofrt5682 /proc/asound/cards \
-    || { echo "ERROR: sound card came back with a corrupted name (kernel bug seen on 7.2.13); UCM cannot match it. Reboot to restore audio."; exit 1; }
+    || { echo "ERROR: sound card came back with a corrupted name (kernel bug seen on 7.2.13 and 7.3.3); UCM cannot match it. Reboot to restore audio."; exit 1; }
 
 echo "[5/5] Starting user audio stack..."
 trap - EXIT

@@ -6,8 +6,9 @@ Applies to: Chromebooks with Intel Tiger Lake and Realtek RT5682 codec running L
 Tested on:
 - Ubuntu 26.04 LTS, kernel 7.0.0, alsa-ucm-conf 1.2.15.3
 - Fedora 44 Workstation, kernel 7.2.13, alsa-ucm 1.2.15.3
-  (UCM fix works; the suspend recovery does **not** — see
-  [Recovery broken on kernel 7.2.13](#recovery-broken-on-kernel-7213-corrupted-card-name))
+- Fedora 44 Workstation, kernel 7.3.3
+  (on both 7.x kernels the UCM fix works; the suspend recovery does
+  **not** — see [Recovery broken on kernel 7.x](#recovery-broken-on-kernel-7x-corrupted-card-name))
 
 > **Fedora:** `alsaucm` (used below and by `fix-chromebook-audio.sh` to
 > verify the config) is not in `alsa-utils` on Fedora but in its own
@@ -442,7 +443,7 @@ before the reset (browsers especially) may stay silent until restarted**
 — the audio device they were attached to no longer exists. Most desktop
 apps reconnect automatically.
 
-### Recovery broken on kernel 7.2.13 (corrupted card name)
+### Recovery broken on kernel 7.x (corrupted card name)
 
 **Symptom:** no sound at all after any suspend/resume — not even HDMI or
 Bluetooth — and `wpctl status` says "Could not connect to PipeWire".
@@ -465,9 +466,32 @@ random bytes instead of `sof-rt5682` / `sofrt5682`:
 
 (the jack input devices created at rescan get the same garbage names,
 e.g. `0Jê���� Headset Jack` in `/proc/bus/input/devices`). At boot the
-name is correct; it only breaks on the PCI remove/rescan rebuild. That
-looks like a kernel regression — the name being copied from memory
-that is already freed — but the exact cause is not confirmed yet.
+name is correct; it only breaks on the PCI remove/rescan rebuild.
+
+Findings so far (2026-11-14):
+- **Kernel 7.3.3 is affected too** — upgrading from 7.2.13 did not fix it.
+- **The I2C codec/amp rebind is not the cause:** a bare PCI
+  remove/rescan with no I2C step also comes back garbled. (Caveat: in
+  that test PipeWire was accidentally left running during the remove.)
+- **The garbage changes over time** — the same card read `SSP0-Codec`
+  at one moment and `Pz…` at another, with nothing touching it in
+  between. Text that rewrites itself means the kernel is reading freed
+  memory that has been reused: this is a use-after-free in the
+  SOF/ASoC card rebuild, not a cosmetic naming bug.
+- After a second rebuild in the same boot, the DSP also rejects HDMI
+  streams (`ipc tx error for 0x60010000 ... -5`).
+
+Every recovery run triggers that kernel memory bug and gives no working
+audio anyway, so on 7.x kernels **disable the automatic recovery**:
+
+```bash
+sudo systemctl disable --now sof-audio-resume.service sof-audio-watchdog.service
+```
+
+and reboot. Whether the original DSP wedge still happens on 7.x is
+untested — the wedge was seen on 6.19/7.0. If audio survives a
+suspend/resume with the services off, the recovery is no longer needed
+on this kernel.
 
 Two consequences:
 1. UCM is looked up by card driver name (`conf.d/sof-rt5682/`), so it no
@@ -480,9 +504,9 @@ Two consequences:
    restarts the audio stack however it exits, and reports the corrupted
    name explicitly.
 
-**Workaround:** reboot. That restores the card name and audio, until the
-next suspend. Newer kernels (7.2.15, 7.3.3) are installed but not yet
-tested; check whether the name survives a recovery on them:
+**Workaround:** reboot. That restores the card name and audio. To check
+whether a future kernel fixes the rebuild, run one recovery by hand and
+look at the name:
 
 ```bash
 sudo sof-audio-recover
