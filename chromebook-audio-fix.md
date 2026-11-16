@@ -522,11 +522,11 @@ bash install-soft-recover.sh        # or install the automatic watchdog
 wedge loop (same thresholds as the old watchdog) and runs the soft
 recovery, so the looping noise stops after ~20 s by itself.
 
-Status: verified once on a real wedge that playback runs error-free
-again afterwards, and end-to-end with a simulated trigger. Not yet
-verified: that the speaker amps are always audible afterwards (the PCI
-recovery needed an amp re-probe after suspend), and behaviour over many
-suspend cycles.
+Status: verified once on a real wedge (kernel 7.3.3) that playback runs
+error-free and the speakers are audible afterwards, and end-to-end with
+a simulated trigger. Not yet verified: that the speaker amps are
+audible every time (the PCI recovery needed an amp re-probe after
+suspend), and behaviour over many suspend cycles.
 
 Untested alternative if the wedge stays frequent: this firmware also
 offers S3 (`cat /sys/power/mem_sleep` → `[s2idle] deep`). The wedge is
