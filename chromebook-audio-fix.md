@@ -369,6 +369,12 @@ journalctl -b -1 | grep -E "PM: suspend (entry|exit)"
 #   ...confirms the wedge follows a suspend/resume cycle
 ```
 
+The "Broken pipe" part is translated into your locale — on a Norwegian
+system it reads `snd_pcm_avail after recover: Røret ble brutt`. Search
+for the `snd_pcm_avail after recover:` prefix, not the whole line (the
+watchdog only does this since 2026-11-16; before that it never fired on
+non-English systems).
+
 `aplay -l` still lists the card and `wpctl status` may hang — userspace
 restarts can't fix it because the dead firmware lives in the DSP itself.
 
@@ -488,10 +494,23 @@ audio anyway, so on 7.x kernels **disable the automatic recovery**:
 sudo systemctl disable --now sof-audio-resume.service sof-audio-watchdog.service
 ```
 
-and reboot. Whether the original DSP wedge still happens on 7.x is
-untested — the wedge was seen on 6.19/7.0. If audio survives a
-suspend/resume with the services off, the recovery is no longer needed
-on this kernel.
+and reboot.
+
+**The DSP wedge still happens on 7.3.3** (tested 2026-11-14 to 16 with
+the services off): once for about a minute right after a 2 s
+suspend, which cleared by itself, and once more than 5 h after the last
+resume with no suspend involved, which looped noise until PipeWire was
+killed. So on 7.x the wedge is still there but the no-reboot recovery
+is not usable. Until either is fixed in the kernel:
+
+1. Silence the loop — PipeWire hangs in the kernel and ignores a normal
+   stop, so kill it:
+   ```bash
+   systemctl --user stop pipewire.socket pipewire-pulse.socket \
+       pipewire.service pipewire-pulse.service wireplumber.service
+   pkill -9 -x pipewire
+   ```
+2. Reboot to get audio back.
 
 Two consequences:
 1. UCM is looked up by card driver name (`conf.d/sof-rt5682/`), so it no

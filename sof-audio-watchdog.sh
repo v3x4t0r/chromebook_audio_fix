@@ -13,7 +13,10 @@
 # repeat), so it runs sof-audio-recover. A cooldown stops it from ever
 # recovering more often than once per 2 minutes.
 
-PATTERN='snd_pcm_avail after recover: Broken pipe'
+# Match only the untranslated prefix: pipewire logs strerror(EPIPE) in
+# the user's locale ("Røret ble brutt" on nb_NO), so the full English
+# "...: Broken pipe" line never matched on a non-English system.
+PATTERN='snd_pcm_avail after recover:'
 WINDOW=30       # seconds; loop logs every ~6 s
 THRESHOLD=3     # hits within WINDOW that mean "wedged"
 COOLDOWN=120    # seconds between recoveries
