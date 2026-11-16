@@ -500,17 +500,38 @@ and reboot.
 the services off): once for about a minute right after a 2 s
 suspend, which cleared by itself, and once more than 5 h after the last
 resume with no suspend involved, which looped noise until PipeWire was
-killed. So on 7.x the wedge is still there but the no-reboot recovery
-is not usable. Until either is fixed in the kernel:
+killed. So on 7.x the wedge is still there but the PCI-rebuild recovery
+is not usable.
 
-1. Silence the loop — PipeWire hangs in the kernel and ignores a normal
-   stop, so kill it:
-   ```bash
-   systemctl --user stop pipewire.socket pipewire-pulse.socket \
-       pipewire.service pipewire-pulse.service wireplumber.service
-   pkill -9 -x pipewire
-   ```
-2. Reboot to get audio back.
+**Use the soft recovery instead** (2026-11-16): the kernel powers the
+DSP down ~2 s after the last PCM is closed and downloads the firmware
+again on the next open. The wedge only persists because PipeWire keeps
+the dead speaker PCM open — and hangs on it, ignoring a normal stop.
+Killing PipeWire, waiting for
+`/sys/bus/pci/devices/0000:00:1f.3/power/runtime_status` to read
+`suspended`, and starting PipeWire again brought the wedged card back
+with no reboot, no root and the card name intact:
+
+```bash
+bash sof-audio-soft-recover.sh      # recover once, as your normal user
+bash install-soft-recover.sh        # or install the automatic watchdog
+```
+
+`install-soft-recover.sh` installs a systemd **user** service
+(`sof-audio-soft-watchdog.service`) that watches the journal for the
+wedge loop (same thresholds as the old watchdog) and runs the soft
+recovery, so the looping noise stops after ~20 s by itself.
+
+Status: verified once on a real wedge that playback runs error-free
+again afterwards, and end-to-end with a simulated trigger. Not yet
+verified: that the speaker amps are always audible afterwards (the PCI
+recovery needed an amp re-probe after suspend), and behaviour over many
+suspend cycles.
+
+Untested alternative if the wedge stays frequent: this firmware also
+offers S3 (`cat /sys/power/mem_sleep` → `[s2idle] deep`). The wedge is
+tied to s2idle, so booting with `mem_sleep_default=deep` may avoid it
+altogether.
 
 Two consequences:
 1. UCM is looked up by card driver name (`conf.d/sof-rt5682/`), so it no

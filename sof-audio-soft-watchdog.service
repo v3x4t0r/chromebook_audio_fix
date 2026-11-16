@@ -1,0 +1,18 @@
+# sof-audio-soft-watchdog.service
+# Installed to ~/.config/systemd/user/ by install-soft-recover.sh.
+#
+# User-level replacement for sof-audio-watchdog.service on kernels 7.2+:
+# watches the journal for the wedged-DSP loop and recovers by letting
+# the DSP power down and boot again (see sof-audio-soft-recover.sh)
+# instead of rebuilding the card over PCI.
+
+[Unit]
+Description=Auto-recover wedged SOF DSP by power-cycling it (Copano audio)
+
+[Service]
+ExecStart=%h/.local/bin/sof-audio-soft-recover --watch
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
